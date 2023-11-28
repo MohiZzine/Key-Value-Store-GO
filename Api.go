@@ -4,47 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sync"
 )
-
-// MemDB represents an in-memory database.
-type MemDB struct {
-	mu     sync.RWMutex
-	values map[string]string
-}
-
-// Set sets the value for the given key in the MemDB.
-func (mem *MemDB) Set(key, value string) {
-	mem.mu.Lock()
-	defer mem.mu.Unlock()
-	mem.values[key] = value
-}
-
-// Get gets the value for the given key from the MemDB.
-func (mem *MemDB) Get(key string) (string, bool) {
-	mem.mu.RLock()
-	defer mem.mu.RUnlock()
-	val, ok := mem.values[key]
-	return val, ok
-}
-
-// Del deletes the value for the given key from the MemDB.
-func (mem *MemDB) Del(key string) (string, bool) {
-	mem.mu.Lock()
-	defer mem.mu.Unlock()
-	val, ok := mem.values[key]
-	if ok {
-		delete(mem.values, key)
-	}
-	return val, ok
-}
-
-// NewMemDB creates a new instance of MemDB.
-func NewMemDB() *MemDB {
-	return &MemDB{
-		values: make(map[string]string),
-	}
-}
 
 // LSTM represents a key-value store that uses an in-memory database.
 type LSTM struct {
@@ -60,18 +20,18 @@ func (l *LSTM) Set(key, value string) error {
 // Get gets the value for the given key from the LSTM's MemDB.
 // If the key is not found, it returns "Value Probably in the database".
 func (l *LSTM) Get(key string) (string, error) {
-	val, ok := l.MemDB.Get(key)
-	if !ok {
-		return "Value Probably in the database", nil
+	val, err := l.MemDB.Get(key)
+	if err != nil {
+		return "", err
 	}
 	return val, nil
 }
 
 // Del deletes the value for the given key from the LSTM's MemDB.
 func (l *LSTM) Del(key string) (string, error) {
-	val, ok := l.MemDB.Del(key)
-	if !ok {
-		return "", fmt.Errorf("Key not found")
+	val, err := l.MemDB.Del(key)
+	if err != nil {
+		return "", err
 	}
 	return val, nil
 }
