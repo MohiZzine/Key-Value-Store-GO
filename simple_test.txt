@@ -1,0 +1,4 @@
+curl -X POST -H "Content-Type: application/json" -d "{\"key\":\"zine\", \"value\":\"zwine\"}" "http://localhost:8080/set"
+
+curl "http://localhost:8080/get?key=zine"
+curl -X DELETE "http://localhost:8080/del?key=mohi"
