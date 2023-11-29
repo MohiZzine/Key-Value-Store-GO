@@ -5,6 +5,12 @@ import (
 	"sort"
 )
 
+// KeyValue represents a key-value pair.
+type KeyValue struct {
+	Key   string
+	Value string
+}
+
 type Cmd int
 
 const (
@@ -80,8 +86,28 @@ func (store *SortedKeyValueStore) Get(key string) (string, error) {
 	}
 }
 
+// Load loads key-values into the SortedKeyValueStore.
+func (store *SortedKeyValueStore) Load(keyValues []KeyValue) {
+	for _, kv := range keyValues {
+		store.Set(kv.Key, kv.Value, true)
+	}
+}
+
+func (store *SortedKeyValueStore) GetKeyValues() []KeyValue {
+	keyValues := make([]KeyValue, 0, len(store.keys))
+
+	for _, key := range store.keys {
+		valueMarkerPair := store.values[key]
+		keyValues = append(keyValues, KeyValue{Key: key, Value: valueMarkerPair.Value})
+	}
+
+	return keyValues
+}
+
 type MemDB struct {
 	sortedKeyValueStore *SortedKeyValueStore
+	smallestKey         string
+	largestKey          string
 }
 
 func NewMemDB() *MemDB {
@@ -90,19 +116,47 @@ func NewMemDB() *MemDB {
 	}
 }
 
+// Add a method to set the smallest and largest keys
+func (mem *MemDB) setRangeKeys(smallestKey, largestKey string) {
+	mem.smallestKey = smallestKey
+	mem.largestKey = largestKey
+}
+
 func (mem *MemDB) Set(key, value string) error {
 	mem.sortedKeyValueStore.Set(key, value, true)
 	return nil
 }
 
-func (mem *MemDB) Get(key string) (string, error) {
-	val, err := mem.sortedKeyValueStore.Get(key)
+func (mem *MemDB) LoadSSTFile(filename string) error {
+	keyValues, smallestKey, largestKey, err := parseSSTFile(filename)
 	if err != nil {
-
-		return "", err
+		return err
 	}
 
-	return val, nil
+	mem.sortedKeyValueStore.Load(keyValues)
+	mem.setRangeKeys(smallestKey, largestKey)
+	return nil
+}
+
+func (mem *MemDB) Get(key string) (string, error) {
+	// Check if the key is within the range of keys in the SST file
+	if key < mem.smallestKey || key > mem.largestKey {
+		return "", errors.New("Key probably in database")
+	}
+
+	// Retrieve the value and marker for the key from the SortedKeyValueStore
+	valueMarkerPair, exists := mem.sortedKeyValueStore.Get(key)
+	if exists != nil {
+		return "", errors.New("Key not found")
+	}
+
+	if valueMarkerPair != "" {
+		// If marker is true, return the value
+		return valueMarkerPair, nil
+	} else {
+		// If marker is false, return "key not found" error
+		return "", errors.New("Key has been deleted")
+	}
 }
 
 func (mem *MemDB) Del(key string) (string, error) {

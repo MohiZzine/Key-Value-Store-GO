@@ -1,57 +1,60 @@
 package main
 
-// import (
-// 	"encoding/binary"
-// )
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"sync"
+	"time"
+)
 
-// func (mem *memDB) writeToLogFile(cmd Cmd, key, value string) error {
-// 	// Binary encode the log entry (marker + key + value)
-// 	entry := make([]byte, binary.MaxVarintLen64*3+len(key)+len(value))
-// 	pos := binary.PutVarint(entry, int64(cmd))
-// 	pos += binary.PutVarint(entry[pos:], int64(len(key)))
-// 	copy(entry[pos:], key)
-// 	pos += len(key)
-// 	binary.PutVarint(entry[pos:], int64(len(value)))
-// 	copy(entry[pos+len(value):], value)
+// WALRecord represents a record in the Write-Ahead Log.
+type WALRecord struct {
+	Operation string    `json:"operation"`
+	Key       string    `json:"key"`
+	Value     string    `json:"value,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
+}
 
-// 	_, err := mem.logFile.Write(entry)
-// 	if err != nil {
-// 		return err
-// 	}
+// WAL represents the Write-Ahead Log.
+type WAL struct {
+	file *os.File
+	mu   sync.Mutex
+}
 
-// 	return nil
-// }
+// NewWAL creates a new Write-Ahead Log.
+func NewWAL(filename string) (*WAL, error) {
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, err
+	}
 
-// // CloseLogFile closes the log file when the program exits
-// func (mem *memDB) CloseLogFile() {
-// 	mem.logFile.Close()
-// }
+	return &WAL{
+		file: file,
+	}, nil
+}
 
-// func main() {
-// 	// Instantiate memDB with a log file
-// 	memDB, err := NewInMem("log.bin")
-// 	if err != nil {
-// 		fmt.Println("Error creating memDB:", err)
-// 		return
-// 	}
-// 	defer memDB.CloseLogFile()
+// WriteRecord writes a WALRecord to the Write-Ahead Log.
+func (wal *WAL) WriteRecord(record WALRecord) error {
+	wal.mu.Lock()
+	defer wal.mu.Unlock()
 
-// 	// Use memDB as needed (set, get, del)
-// 	memDB.Set("key1", "value1")
-// 	memDB.Set("key2", "value2")
-// 	val, err := memDB.Get("key1")
-// 	if err != nil {
-// 		fmt.Println("Error getting key1:", err)
-// 	} else {
-// 		fmt.Println("Get result:", val)
-// 	}
+	// Serialize the record to JSON
+	jsonRecord, err := json.Marshal(record)
+	if err != nil {
+		return err
+	}
 
-// 	memDB.Del("key1")
+	// Append the JSON record to the WAL file
+	_, err = fmt.Fprintln(wal.file, string(jsonRecord))
+	if err != nil {
+		return err
+	}
 
-// 	val, err = memDB.Get("key1")
-// 	if err != nil {
-// 		fmt.Println("Error getting key1:", err)
-// 	} else {
-// 		fmt.Println("Get result:", val)
-// 	}
-// }
+	return nil
+}
+
+// Close closes the Write-Ahead Log file.
+func (wal *WAL) Close() error {
+	return wal.file.Close()
+}
