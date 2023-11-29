@@ -10,6 +10,7 @@ import (
 
 const (
 	magicNumber uint64 = 0x6973656D
+	threshold  uint64 = 1000
 )
 
 type SSTFile struct {

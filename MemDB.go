@@ -108,11 +108,17 @@ type MemDB struct {
 	sortedKeyValueStore *SortedKeyValueStore
 	smallestKey         string
 	largestKey          string
+	wal                 *WAL
 }
 
 func NewMemDB() *MemDB {
+	wal, err := NewWAL("wal")
+	if err != nil {
+		return nil
+	}
 	return &MemDB{
 		sortedKeyValueStore: NewSortedKeyValueStore(),
+		wal:                 wal,
 	}
 }
 
@@ -123,7 +129,13 @@ func (mem *MemDB) setRangeKeys(smallestKey, largestKey string) {
 }
 
 func (mem *MemDB) Set(key, value string) error {
+	mem.wal.WriteRecord(WALRecord{Operation: "Set", Key: key, Value: value})
+	// Check if the key is within the range of keys in the SST file
 	mem.sortedKeyValueStore.Set(key, value, true)
+
+	// if len(mem.sortedKeyValueStore.keys) > threshold {
+	// 	// Flush the SortedKeyValueStore to an SST file
+	// 	keyValues := mem.sortedKeyValueStore.GetKeyValues()
 	return nil
 }
 
@@ -160,6 +172,9 @@ func (mem *MemDB) Get(key string) (string, error) {
 }
 
 func (mem *MemDB) Del(key string) (string, error) {
+	mem.wal.WriteRecord(WALRecord{Operation: "Del", Key: key})
+
+	// Check if the key is within the range of keys in the SST file
 	val, err := mem.Get(key)
 	if err != nil {
 		return "", err
