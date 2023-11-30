@@ -1,43 +1,48 @@
-# Key-Value Store with OrderedMap Integration
+# Key-Value Store with Simple HTTP API
 
-## Overview
+## Introduction
 
-Welcome to the Key-Value Store project! This project aims to provide a persistent key-value storage solution with a simple and efficient HTTP API. The architecture is inspired by LSM tree models, and the implementation draws inspiration from well-established projects like leveldb and rocksdb.
+This project implements a persistent key-value store with a simple HTTP API. It exposes the following endpoints:
 
-## Features
+* GET http://localhost:8081/get?key=keyName: Retrieves the value associated with the specified key.
+* POST http://localhost:8081/set: Sets the value associated with the specified key. The key-value pair is provided in the request body as JSON.
+* DELETE http://localhost:8081/del?key=keyName: Deletes the specified key and returns its associated value.
 
-- **HTTP API:** Exposes three crucial endpoints for key-value operations:
-  - `GET http://localhost:8080/get?key=keyName`: Retrieve the value associated with the provided key.
-  - `POST http://localhost:8080/set`: Set a key-value pair. Send the data in JSON format in the request body.
-  - `DELETE http://localhost:8080/del?key=keyName`: Delete a key from the store and return its existing value if present.
+The key-value store follows the LSM tree model for reading and writing data. Write operations are first written to the memtable, a sorted map of key-value pairs. The memtable is periodically flushed to disk as an SST file (Sorted String Table). To prevent the number of SST files from growing too large, compaction is performed to merge smaller files into larger ones. In fact, the latter feature is done in parallel with a go routine.
 
-- **Write-Ahead Log (WAL):** Ensures crash safety by writing all write operations first to a memtable (sorted map of key-value pairs) and appending them to the WAL before responding to the user.
+The SST files are in binary format and include the following fields:
 
-- **SST Files (Sorted String Table):** Implements a mechanism for periodically flushing the contents of the memtable to disk as an SST file. This process helps in maintaining a snapshot of the memtable on disk and preventing the number of SST files from becoming too large.
+* Magic Number: The unique identifier for the application.
+* Entry Count: Number of the key-value pairs in the SST File.
+* Version: A version number to manage updates to the value.
+* Key: The unique identifier for the value.
+* Key: The unique identifier for the value.
+* Value: The data associated with the key.
+* Checksum: A hash value to detect corrupted files.
 
-- **OrderedMap Integration:** Utilizes the [OrderedMap](https://github.com/example/orderedmap) library, a sorted map data structure, to enhance the efficiency of key-value storage and retrieval.
+## Added Dependencies
 
-## Project Structure
 
-- **MemDB:**
-  - Handles in-memory storage of key-value pairs.
-  - Manages the memtable, write-ahead log (WAL), and the flushing mechanism.
 
-- **HTTP API:**
-  - Listens for incoming HTTP requests and delegates them to the MemDB for processing.
-  - Provides a user-friendly interface for interacting with the key-value store.
+## Extras
 
-- **SST Files:**
-  - Crucial for persistence and durability.
-  - Contains functions for parsing existing SST files and flushing memtable contents to create new SST files.
+* Compression: SST files are compressed to save disk space.
 
-- **OrderedMap:**
-  - Integrated for optimized key ordering and retrieval.
+## Problem Encountered - Wal Cleaning
+
+At first (Refer to previous commits for details), I tried to implement the log file with a watermark. That decision has proven to be the most detrimental to both my project and my sanity. In fact, when renaming the temporary file to the log (supposedly it is atomic on unix based systems but not on windows), I had always gotten an Access Denied Error. I have spent 3 full days trying to debug the problem but to no avail. As such, now I only truncate the log file after flushing. Indeed an expensive approach, and not a standard, but I will try to implement Wal Cleaning correctly later.
+
+## Future Improvements
+
+* *Ensuring Atomicity:* When Flushing, the creation of the SST File is not guaranteed to be atomic, and can lead to bugs when the application crashes (Never happened to me when testing). However, that is only dependent on the Write method of files (Operating System). As such, I am looking for methods to ensure atomicity of writing whole files.
+* *Concurrent Distributed Database:* Implement a concurrent distributed database to handle multiple clients and achieve high availability.
+* *Performance Enhancement:* Explore techniques to enhance the performance of the key-value store, such as utilizing Goroutines for parallel processing and optimizing data structures.
 
 ## Getting Started
 
-1. **Clone the Repository:**
+To run the key-value store, follow these steps:
 
-   ```bash
-   git clone https://github.com/mohiZzine/key-value-store.git
-  ```
+1. Clone the repository.
+2. Start the server: go run .
+
+You can then access the key-value store using aforementioned API endpoints.
