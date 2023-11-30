@@ -8,7 +8,7 @@ This project implements a persistent key-value store with a simple HTTP API. It 
 * POST http://localhost:8081/set: Sets the value associated with the specified key. The key-value pair is provided in the request body as JSON.
 * DELETE http://localhost:8081/del?key=keyName: Deletes the specified key and returns its associated value.
 
-The key-value store follows the LSM tree model for reading and writing data. Write operations are first written to the memtable, a sorted map of key-value pairs. The memtable is periodically flushed to disk as an SST file (Sorted String Table). To prevent the number of SST files from growing too large, compaction is performed to merge smaller files into larger ones. In fact, the latter feature is done in parallel with a go routine.
+The key-value store operates on the LSM tree model for efficient data reading and writing. Write operations are initially stored in the memtable, a sorted map of key-value pairs. Periodically, the memtable is flushed to disk as an SST file (Sorted String Table). To prevent an excessive number of SST files, compaction merges smaller files into larger ones. This compaction process is executed concurrently using a Go routine.
 
 The SST files are in binary format and include the following fields:
 
@@ -22,6 +22,14 @@ The SST files are in binary format and include the following fields:
 
 ## Added Dependencies
 
+In this project, the [orderedmap](https://github.com/iancoleman/orderedmap/tree/master) package has been integrated to efficiently manage the ordering of keys in the memtable. This package provides a reliable and performant ordered map implementation.
+
+To integrate this dependency into your project, ensure that Go is installed and execute:
+
+
+```bash
+go get -u github.com/iancoleman/sortedmap
+```
 
 
 ## Extras
@@ -30,13 +38,14 @@ The SST files are in binary format and include the following fields:
 
 ## Problem Encountered - Wal Cleaning
 
-At first (Refer to previous commits for details), I tried to implement the log file with a watermark. That decision has proven to be the most detrimental to both my project and my sanity. In fact, when renaming the temporary file to the log (supposedly it is atomic on unix based systems but not on windows), I had always gotten an Access Denied Error. I have spent 3 full days trying to debug the problem but to no avail. As such, now I only truncate the log file after flushing. Indeed an expensive approach, and not a standard, but I will try to implement Wal Cleaning correctly later.
+Initially, attempts were made to implement log file management with a watermark. Unfortunately, this decision proved to be challenging, resulting in persistent Access Denied Errors, particularly when renaming the temporary file to the log (known to be atomic on Unix-based systems but not on Windows). After extensive debugging efforts over three days, the decision was made to truncate the log file post-flushing. While not the most cost-effective approach, it provides a temporary solution until Wal Cleaning is implemented correctly in future updates.
+
 
 ## Future Improvements
 
-* *Ensuring Atomicity:* When Flushing, the creation of the SST File is not guaranteed to be atomic, and can lead to bugs when the application crashes (Never happened to me when testing). However, that is only dependent on the Write method of files (Operating System). As such, I am looking for methods to ensure atomicity of writing whole files.
-* *Concurrent Distributed Database:* Implement a concurrent distributed database to handle multiple clients and achieve high availability.
-* *Performance Enhancement:* Explore techniques to enhance the performance of the key-value store, such as utilizing Goroutines for parallel processing and optimizing data structures.
+* *Ensuring Atomicity:* Investigate methods to ensure the atomicity of creating SST files during flushing, particularly focusing on the file writing process dependent on the operating system.
+* *Concurrent Distributed Database:* Develop a concurrent distributed database to handle multiple clients and achieve high availability.
+* *Performance Enhancement:* Explore techniques, such as leveraging Goroutines for parallel processing and optimizing data structures, to enhance the key-value store's performance.
 
 ## Getting Started
 
