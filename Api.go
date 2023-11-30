@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 )
 
 // LSTM represents a key-value store that uses an in-memory database.
@@ -118,18 +117,6 @@ func main() {
 			fmt.Println("Error starting server:", err)
 		}
 	}()
-
-	// Perform some operations on the database
-	memDB.Set("key1", "value1")
-	memDB.Set("key2", "value2")
-	memDB.Set("key3", "value3")
-
-	// Flush the data to an SST file
-	err := flushSSTFile("data.sst", memDB.sortedKeyValueStore.GetKeyValues())
-	if err != nil {
-		fmt.Println("Error flushing data to SST file:", err)
-		os.Exit(1)
-	}
 
 	// Close the server after performing operations
 	fmt.Println("Press Ctrl+C to stop the server...")

@@ -2,7 +2,9 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"sort"
+	"strconv"
 )
 
 // KeyValue represents a key-value pair.
@@ -28,7 +30,8 @@ func (e Error) Error() string {
 }
 
 const (
-	Empty Error = iota
+	Empty     Error = iota
+	threshold int   = 3
 )
 
 type DB interface {
@@ -128,14 +131,42 @@ func (mem *MemDB) setRangeKeys(smallestKey, largestKey string) {
 	mem.largestKey = largestKey
 }
 
+// New function to check the threshold and flush data into SST files
+func (mem *MemDB) checkAndFlush() error {
+	fmt.Println("Checking threshold...")
+	fmt.Println("Current key count:", len(mem.sortedKeyValueStore.keys))
+	if len(mem.sortedKeyValueStore.keys) > threshold {
+		// Increment the file index for naming
+		mem.wal.Flush()
+
+		// Flush the SortedKeyValueStore to an SST file
+		keyValues := mem.sortedKeyValueStore.GetKeyValues()
+		filename := "mohieddine_" + strconv.Itoa(mem.wal.currentIndex) + ".sst" // Adjust the naming convention as needed
+		fmt.Println("Flushing to SST file:", filename)
+		err := flushSSTFile(filename, keyValues)
+		if err != nil {
+			return err
+		}
+
+		// Clear the SortedKeyValueStore after flushing
+		mem.sortedKeyValueStore = NewSortedKeyValueStore()
+		mem.setRangeKeys("", "") // Reset range keys for the new SST file
+	}
+	return nil
+}
+
 func (mem *MemDB) Set(key, value string) error {
 	mem.wal.WriteRecord(WALRecord{Operation: "Set", Key: key, Value: value})
+
 	// Check if the key is within the range of keys in the SST file
 	mem.sortedKeyValueStore.Set(key, value, true)
 
-	// if len(mem.sortedKeyValueStore.keys) > threshold {
-	// 	// Flush the SortedKeyValueStore to an SST file
-	// 	keyValues := mem.sortedKeyValueStore.GetKeyValues()
+	// Check and flush if threshold is reached
+	err := mem.checkAndFlush()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -151,24 +182,38 @@ func (mem *MemDB) LoadSSTFile(filename string) error {
 }
 
 func (mem *MemDB) Get(key string) (string, error) {
-	// Check if the key is within the range of keys in the SST file
-	if key < mem.smallestKey || key > mem.largestKey {
+	// Check if the key is within the range of keys in the SST files
+	if (key < mem.smallestKey || key > mem.largestKey) && mem.smallestKey != "" && mem.largestKey != "" {
 		return "", errors.New("Key probably in database")
 	}
 
 	// Retrieve the value and marker for the key from the SortedKeyValueStore
 	valueMarkerPair, exists := mem.sortedKeyValueStore.Get(key)
-	if exists != nil {
-		return "", errors.New("Key not found")
+	if exists == nil && valueMarkerPair != "" {
+		// If the key is found in the SortedKeyValueStore and marked as present
+		return valueMarkerPair, nil
 	}
 
-	if valueMarkerPair != "" {
-		// If marker is true, return the value
-		return valueMarkerPair, nil
-	} else {
-		// If marker is false, return "key not found" error
-		return "", errors.New("Key has been deleted")
+	// Check SST files from the most recent to the least recent
+	for i := mem.wal.currentIndex; i >= 0; i-- {
+		sstFile := "mohieddine_" + strconv.Itoa(i) + ".sst" // Adjust the naming convention as needed
+		keyValues, _, _, err := parseSSTFile(sstFile)
+		if err != nil {
+			// Handle the error, possibly log it
+			continue
+		}
+
+		// Iterate through key-values in the SST file
+		for _, kv := range keyValues {
+			if kv.Key == key {
+				// If the key is found in the SST file, return the associated value
+				return kv.Value, nil
+			}
+		}
 	}
+
+	// Key not found in MemDB or SST files
+	return "", errors.New("Key not found")
 }
 
 func (mem *MemDB) Del(key string) (string, error) {

@@ -5,21 +5,13 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"time"
 )
-
-// WALRecord represents a record in the Write-Ahead Log.
-type WALRecord struct {
-	Operation string    `json:"operation"`
-	Key       string    `json:"key"`
-	Value     string    `json:"value,omitempty"`
-	Timestamp time.Time `json:"timestamp"`
-}
 
 // WAL represents the Write-Ahead Log.
 type WAL struct {
-	file *os.File
-	mu   sync.Mutex
+	file         *os.File
+	mu           sync.Mutex
+	currentIndex int // New field to track the current index
 }
 
 // NewWAL creates a new Write-Ahead Log.
@@ -30,7 +22,8 @@ func NewWAL(filename string) (*WAL, error) {
 	}
 
 	return &WAL{
-		file: file,
+		file:         file,
+		currentIndex: 0, // Initialize the current index to 0
 	}, nil
 }
 
@@ -52,6 +45,14 @@ func (wal *WAL) WriteRecord(record WALRecord) error {
 	}
 
 	return nil
+}
+
+// Flush resets the current index.
+func (wal *WAL) Flush() {
+	wal.mu.Lock()
+	defer wal.mu.Unlock()
+
+	wal.currentIndex++
 }
 
 // Close closes the Write-Ahead Log file.
