@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 )
@@ -119,10 +122,73 @@ func NewMemDB() *MemDB {
 	if err != nil {
 		return nil
 	}
-	return &MemDB{
+
+	mem := &MemDB{
 		sortedKeyValueStore: NewSortedKeyValueStore(),
 		wal:                 wal,
 	}
+
+	// Recover from WAL
+	mem.recoverFromWAL()
+
+	return mem
+}
+
+// recoverFromWAL replays WAL operations to reconstruct the MemDB state.
+func (mem *MemDB) recoverFromWAL() {
+	// Iterate through the WAL starting from the last successfully flushed index (watermark)
+	for i := mem.wal.watermark; i < mem.wal.currentIndex; i++ {
+		walRecord, err := readWALRecord(i)
+		if err != nil {
+			// Handle the error, possibly log it
+			continue
+		}
+
+		// Replay the WAL operation
+		switch walRecord.Operation {
+		case SetOperation:
+			mem.sortedKeyValueStore.Set(walRecord.Key, walRecord.Value, true)
+		case DelOperation:
+			val, _ := mem.sortedKeyValueStore.Get(walRecord.Key)
+			mem.sortedKeyValueStore.Set(walRecord.Key, val, false)
+		}
+	}
+
+	// Set the smallest and largest keys based on the recovered state
+	mem.setRangeKeys("", "")
+}
+
+// readWALRecord reads a WALRecord at the specified index.
+func readWALRecord(index int) (*WALRecord, error) {
+	// Open the WAL file
+	file, err := os.Open("wal")
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	// Read and discard records until reaching the desired index
+	scanner := bufio.NewScanner(file)
+	for i := 0; i < index; i++ {
+		if !scanner.Scan() {
+			return nil, errors.New("index out of bounds")
+		}
+	}
+
+	// Read the record at the desired index
+	if !scanner.Scan() {
+		return nil, errors.New("index out of bounds")
+	}
+	recordStr := scanner.Text()
+
+	// Deserialize the record
+	var record WALRecord
+	err = json.Unmarshal([]byte(recordStr), &record)
+	if err != nil {
+		return nil, err
+	}
+
+	return &record, nil
 }
 
 // Add a method to set the smallest and largest keys
