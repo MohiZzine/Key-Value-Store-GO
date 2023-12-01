@@ -8,16 +8,14 @@ This project implements a persistent key-value store with a simple HTTP API. It 
 * POST http://localhost:8081/set: Sets the value associated with the specified key. The key-value pair is provided in the request body as JSON.
 * DELETE http://localhost:8081/del?key=keyName: Deletes the specified key and returns its associated value.
 
-The key-value store operates on the LSM tree model for efficient data reading and writing. Write operations are initially stored in the memtable, a sorted map of key-value pairs. Periodically, the memtable is flushed to disk as an SST file (Sorted String Table). To prevent an excessive number of SST files, compaction merges smaller files into larger ones. This compaction process is executed concurrently using a Go routine.
+The key-value store operates on the LSM tree model for efficient data reading and writing. Write operations are initially stored in the memtable, a sorted map of key-value pairs. Periodically, the memtable is flushed to disk as an SST file (Sorted String Table). 
 
 The SST files are in binary format and include the following fields:
 
 * Magic Number: The unique identifier for the application.
 * Entry Count: Number of the key-value pairs in the SST File.
-* Version: A version number to manage updates to the value.
 * Key: The unique identifier for the value.
 * Value: The data associated with the key.
-* Checksum: A hash value to detect corrupted files.
 
 ## Added Dependencies
 
