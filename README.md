@@ -16,7 +16,6 @@ The SST files are in binary format and include the following fields:
 * Entry Count: Number of the key-value pairs in the SST File.
 * Version: A version number to manage updates to the value.
 * Key: The unique identifier for the value.
-* Key: The unique identifier for the value.
 * Value: The data associated with the key.
 * Checksum: A hash value to detect corrupted files.
 
@@ -32,19 +31,9 @@ go get -u github.com/iancoleman/sortedmap
 ```
 
 
-## Extras
-
-* Compression: SST files are compressed to save disk space.
-
-## Problem Encountered - Wal Cleaning
-
-Initially, attempts were made to implement log file management with a watermark. Unfortunately, this decision proved to be challenging, resulting in persistent Access Denied Errors, particularly when renaming the temporary file to the log (known to be atomic on Unix-based systems but not on Windows). After extensive debugging efforts over three days, the decision was made to truncate the log file post-flushing. While not the most cost-effective approach, it provides a temporary solution until Wal Cleaning is implemented correctly in future updates.
-
-
 ## Future Improvements
 
 * *Ensuring Atomicity:* Investigate methods to ensure the atomicity of creating SST files during flushing, particularly focusing on the file writing process dependent on the operating system.
-* *Concurrent Distributed Database:* Develop a concurrent distributed database to handle multiple clients and achieve high availability.
 * *Performance Enhancement:* Explore techniques, such as leveraging Goroutines for parallel processing and optimizing data structures, to enhance the key-value store's performance.
 
 ## Getting Started
